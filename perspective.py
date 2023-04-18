@@ -94,16 +94,58 @@ def get_contour_bounds(contour):
     # Find the coordinates of the contour points
     coords = np.squeeze(contour)
 
-    # # Find the minimum and maximum x and y coordinates
-    # x_min, y_min = coords.min(axis=0)
-    # x_max, y_max = coords.max(axis=0)
+    # # # Find the minimum and maximum x and y coordinates
+    # # x_min, y_min = coords.min(axis=0)
+    # # x_max, y_max = coords.max(axis=0)
 
-    # Find the maximum x coordinate when y=0
-    x_max = coords[coords[:,1] == 0][:,0].max()
-    # Find the maximum y coordinate when x=0
-    y_max = coords[coords[:,0] == 0][:,1].max()
+    # # Find the maximum x coordinate when y=0
+    # x_max = coords[coords[:,1] == 0][:,0].max()
+    # # Find the maximum y coordinate when x=0
+    # y_max = coords[coords[:,0] == 0][:,1].max()
 
-    return x_max, y_max
+    # # Find the minimum x coordinate when y=0
+    # x_min = coords[coords[:,1] == 0][:,0].min()
+    # # Find the maximum y coordinate when x=0
+    # y_min = coords[coords[:,0] == 0][:,1].min()
+
+    x_values = [x for x, y in coords]
+    y_values = [y for x, y in coords]
+    x_min = min(x_values)
+    x_max = max(x_values)
+    y_min = min(y_values)
+    y_max = max(y_values)
+
+    return x_min, x_max, y_min, y_max
+
+def get_tight_contour_bounds(contour, x_min, x_max, y_min, y_max):
+    # Find the coordinates of the contour points
+    coords = np.squeeze(contour)
+
+    # x_values = [x for x, y in coords]
+    # y_values = [y for x, y in coords]
+    # x_min = min(x_values)
+    # x_max = max(x_values)
+    # y_min = min(y_values)
+    # y_max = max(y_values)
+
+    WIDTH = x_max - x_min
+    HEIGHT = y_max - y_min
+
+    y_values_upper = []
+    y_values_lower = []
+    x_values_left = []
+    x_values_right = []
+    for coord in coords:
+        if coord[0] >= x_min + 0.25*WIDTH and coord[0] <= x_max - 0.25*WIDTH:
+            if coord[1] >= y_min + 0.5*HEIGHT:
+                y_values_lower.append(coord[1])
+            elif coord[1] < y_min + 0.5*HEIGHT:
+                y_values_upper.append(coord[1])
+    
+    y_min_tight = max(y_values_upper)
+    y_max_tight = min(y_values_lower)
+
+    return y_min_tight, y_max_tight
 
 def crop_content(image):
     # Convert the image to grayscale
@@ -117,21 +159,55 @@ def crop_content(image):
 
     # Find the largest contour
     largest_contour = max(contours, key=cv2.contourArea)
-    x_max, y_max = get_contour_bounds(largest_contour)
-    # print(x_max, y_max)
+    x_min, x_max, y_min, y_max = get_contour_bounds(largest_contour)
 
     # Crop the image to the bounding box
-    cropped = image[0:y_max,0:x_max]
+    cropped = image[y_min:y_max,x_min:x_max]
 
     return cropped
 
+def crop_content_tight(image):
+    # Convert the image to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Threshold the image to create a binary image
+    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY)
+
+    # Find the contours in the thresholded image
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Find the largest contour
+    largest_contour = max(contours, key=cv2.contourArea)
+    x_min, x_max, y_min, y_max = get_contour_bounds(largest_contour)
+
+    y_min_tight, y_max_tight = get_tight_contour_bounds(largest_contour, x_min, x_max, y_min, y_max)
+
+    # Crop the image to the bounding box
+    tight_cropped = image[y_min_tight:y_max_tight,x_min:x_max]
+
+    return tight_cropped
+
+
 def postprocess(test_name):
     # test_name = 'test_video_1'
-    img_path = 'img/' + test_name + '.jpg'
-    out_img_path = 'img/' + test_name + '_crop.jpg'
+    img_path = 'img/' + test_name + '_final.jpg'
+    
+    crop_img_path = 'img/' + test_name + '_crop.jpg'
+    tight_crop_img_path = 'img/' + test_name + '_tightcrop.jpg'
 
     image = cv2.imread(img_path)
+    # if image is None:
+    #     print('Image not loaded')
+    # else:
+    #     print('Image loaded successfully')
+
     # rectified_img = rectify_perspective(image)
     # rectified_img = cylindricalWarp(image)
-    rectified_img = crop_content(image)
-    cv2.imwrite(out_img_path, rectified_img)
+    
+    crop_img = crop_content(image)
+    cv2.imwrite(crop_img_path, crop_img)
+    print('Finish cropping the final image (all content preserved).')
+
+    tight_crop_img = crop_content_tight(image)
+    cv2.imwrite(tight_crop_img_path, tight_crop_img)
+    print('Finish tight cropping the final image (no black outliers).')
