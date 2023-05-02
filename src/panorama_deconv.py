@@ -9,7 +9,6 @@ from perspective import postprocess
 
 from deblur import blur_edge, motion_kernel, defocus_kernel, estimate_motion
 
-
 def deblur(frame_list, magnitude, angle):
     deblur_frame_list = []
     for i in range(len(frame_list) - 1):

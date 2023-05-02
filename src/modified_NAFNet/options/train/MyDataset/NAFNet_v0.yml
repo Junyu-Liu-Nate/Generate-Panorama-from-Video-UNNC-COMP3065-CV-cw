@@ -1,0 +1,63 @@
+path:
+  root: .
+  pretrained: experiments/pretrained_models
+  experiments_root: experiments
+  log: experiments/MyDataset/logs
+  models: experiments/MyDataset/models
+
+datasets:
+  train:
+    name: MyDataset
+    type: LQGTDataset
+    dataroot_gt: ./datasets/customized_data.lmdb
+    dataroot_lq: ./datasets/customized_data.lmdb
+    io_backend:
+      type: lmdb
+    gt_size: 128
+    use_flip: true
+    use_rot: true
+    scale: 4
+    interval_list: [1]
+    random_reverse: false
+    batch_size: 16
+    num_worker_per_gpu: 6
+    phase: train
+
+  val:
+    name: MyDataset_val
+    type: LQGTDataset
+    dataroot_gt: ./datasets/customized_data.lmdb
+    dataroot_lq: ./datasets/customized_data.lmdb
+    io_backend:
+      type: lmdb
+    scale: 4
+    interval_list: [1]
+    phase: val
+
+model:
+  name: NAFNetModel
+  type: NAFNetModel
+  generator:
+    type: NAFNetGenerator
+    in_channels: 3
+    out_channels: 3
+    mid_channels: 64
+    num_blocks: 30
+
+train:
+  optim_g:
+    type: Adam
+    lr: !!float 2e-4
+
+  scheduler:
+    type: MultiStepLR
+    milestones: [50000, 100000, 200000, 300000]
+    gamma: !!float 0.5
+
+  total_iter: !!float 4e5
+
+val:
+  val_freq: !!float 5e3
+
+logger:
+  print_freq: 1000
