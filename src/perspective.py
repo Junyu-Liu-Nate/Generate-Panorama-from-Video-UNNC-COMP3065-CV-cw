@@ -14,81 +14,8 @@ def rectify_perspective(image):
     # Crop the image using the bounding rectangle
     cropped_image = image[y:y+h, x:x+w]
 
-    # Straighten the panorama using perspective projection
-    # (h, w) = cropped_image.shape[:2]
-    # src_points = np.float32([[0, 0], [w-1, 0], [w-1, h-1], [0, h-1]])
-    # dst_points = np.float32([[0, 0], [w-1, 0], [w-1, h-1], [0, h-1]])
-    # M = cv2.getPerspectiveTransform(src_points, dst_points)
-    # warped_image = cv2.warpPerspective(cropped_image, M, (w, h))
-
-    # Alternatively, straighten the panorama using cylindrical projection
-    # (h, w) = cropped_image.shape[:2]
-    # focal_length = w
-    # map_x = np.zeros((h,w), np.float32)
-    # map_y = np.zeros((h,w), np.float32)
-    # for y in range(h):
-    #     for x in range(w):
-    #         theta = (x - w/2) / focal_length
-    #         h_ = (y - h/2) / focal_length
-    #         X = np.sin(theta)
-    #         Y = h_
-    #         Z = np.cos(theta)
-    #         x_ = focal_length * X/Z + w/2
-    #         y_ = focal_length * Y/Z + h/2
-    #         map_x[y,x] = x_
-    #         map_y[y,x] = y_
-    # warped_image = cv2.remap(cropped_image,map_x,map_y,cv2.INTER_LINEAR)
-
-    ### Another cylindrical projection example ###
-
-    # K = np.array([[3773.33, 0, w / 2], [0, 3204.55, h / 2], [0, 0, 1]])
-    # K = np.array([[4656.07, 0, w / 2], [0, 3510.00, h / 2], [0, 0, 1]])
-    # h_, w_ = image.shape[:2]
-    # # pixel coordinates
-    # y_i, x_i = np.indices((h_, w_))
-    # X = np.stack([x_i, y_i, np.ones_like(x_i)], axis=-1).reshape(h_ * w_, 3)  # to homog
-    # Kinv = np.linalg.inv(K)
-    # X = Kinv.dot(X.T).T  # normalized coords
-    # # calculate cylindrical coords (sin\theta, h, cos\theta)
-    # A = np.stack([np.sin(X[:, 0]), X[:, 1], np.cos(X[:, 0])], axis=-1).reshape(w_ * h_, 3)
-    # B = K.dot(A.T).T  # project back to image-pixels plane
-    # # back from homog coords
-    # B = B[:, :-1] / B[:, [-1]]
-    # # make sure warp coords only within image bounds
-    # B[(B[:, 0] < 0) | (B[:, 0] >= w_) | (B[:, 1] < 0) | (B[:, 1] >= h_)] = -1
-    # B = B.reshape(h_, w_, -1)
-
-    # img_rgba = cv2.cvtColor(image, cv2.COLOR_BGR2BGRA)  # for transparent borders...
-    # warp the image according to cylindrical coords
-    # warped_image = cv2.remap(img_rgba, B[:, :, 0].astype(np.float32), B[:, :, 1].astype(np.float32), cv2.INTER_AREA, borderMode=cv2.BORDER_TRANSPARENT)
-
     return cropped_image
 
-def cylindricalWarp(img):
-    """This function returns the cylindrical warp for a given image and intrinsics matrix K"""
-    h, w = img.shape[:2]
-    ### focal length in pixels (x) = (26mm) * (1920 pixels) / (10.67mm) = 4656.07 pixels ###
-    ### focal length in pixels (y) = (26mm) * (1080 pixels) / (8.0mm) = 3510.00 pixels ###
-    K = np.array([[4656.07, 0, w / 2], [0, 3510.00, h / 2], [0, 0, 1]])
-
-    h_, w_ = img.shape[:2]
-    # pixel coordinates
-    y_i, x_i = np.indices((h_, w_))
-    X = np.stack([x_i, y_i, np.ones_like(x_i)], axis=-1).reshape(h_ * w_, 3)  # to homog
-    Kinv = np.linalg.inv(K)
-    X = Kinv.dot(X.T).T  # normalized coords
-    # calculate cylindrical coords (sin\theta, h, cos\theta)
-    A = np.stack([np.sin(X[:, 0]), X[:, 1], np.cos(X[:, 0])], axis=-1).reshape(w_ * h_, 3)
-    B = K.dot(A.T).T  # project back to image-pixels plane
-    # back from homog coords
-    B = B[:, :-1] / B[:, [-1]]
-    # make sure warp coords only within image bounds
-    B[(B[:, 0] < 0) | (B[:, 0] >= w_) | (B[:, 1] < 0) | (B[:, 1] >= h_)] = -1
-    B = B.reshape(h_, w_, -1)
-
-    img_rgba = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)  # for transparent borders...
-    # warp the image according to cylindrical coords
-    return cv2.remap(img_rgba, B[:, :, 0].astype(np.float32), B[:, :, 1].astype(np.float32), cv2.INTER_AREA, borderMode=cv2.BORDER_TRANSPARENT)
 
 def get_contour_bounds(contour):
     # Find the coordinates of the contour points
@@ -187,13 +114,74 @@ def crop_content_tight(image):
 
     return tight_cropped
 
+def transform_perspective(img):
+    # # Load the image
+    # img = cv2.imread(image_path)
+
+    # Convert to grayscale
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # Threshold the image to create a binary image
+    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY)
+
+    # Find the contours in the binary image
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Find the largest contour
+    max_contour = max(contours, key=cv2.contourArea)
+
+    width = img.shape[1]
+    height = img.shape[0]
+    left_list = []
+    right_list = []
+    for point in max_contour:
+        pnt = point[0]
+        if pnt[0] <= width / 2:
+            left_list.append(pnt)
+        else:
+            right_list.append(pnt)
+    
+    left_min = min(left_list, key=lambda point: point[0])
+    left_max = max(left_list, key=lambda point: point[0])
+    if left_min[1] >= left_max[1]:
+        top_left = left_max
+        bottom_left = left_min
+    else:
+        top_left = left_min
+        bottom_left = left_max
+
+    right_min = min(right_list, key=lambda point: point[0])
+    right_max = max(right_list, key=lambda point: point[0])
+    if right_min[1] >= right_max[1]:
+        top_right = right_max
+        bottom_right = right_min
+    else:
+        top_right = right_min
+        bottom_right = right_max
+
+    # Define the source points
+    src_points = np.float32([top_left,top_right,bottom_left,bottom_right])
+
+    # Define the destination points
+    width = img.shape[1]
+    height = img.shape[0]
+    dst_points = np.float32([[0, 0], [width-1, 0], [0,height-1], [width-1,height-1]])
+
+    # Calculate the perspective transform matrix
+    M = cv2.getPerspectiveTransform(src_points,dst_points)
+
+    # Warp the image
+    warped_img = cv2.warpPerspective(img,M,(width,height))
+
+    return warped_img
+
 
 def postprocess(test_name):
-    # test_name = 'test_video_1'
     img_path = '../img/' + test_name + '_final.jpg'
     
     crop_img_path = '../img/' + test_name + '_crop.jpg'
     tight_crop_img_path = '../img/' + test_name + '_tightcrop.jpg'
+    transform_img_path = '../img/' + test_name + '_transform.jpg'
 
     image = cv2.imread(img_path)
     # if image is None:
@@ -210,4 +198,12 @@ def postprocess(test_name):
 
     tight_crop_img = crop_content_tight(image)
     cv2.imwrite(tight_crop_img_path, tight_crop_img)
-    print('Finish tight cropping the final image (no black outliers).')
+    print('Finish tight cropping the final image (eliminate black outliers).')
+
+    transform_img = transform_perspective(tight_crop_img)
+    if 'test_video_4' in test_name:
+        cv2.imwrite(transform_img_path, tight_crop_img)
+    else:
+        cv2.imwrite(transform_img_path, transform_img)
+    print('Finish rectifying the perspective of the panorama.')
+

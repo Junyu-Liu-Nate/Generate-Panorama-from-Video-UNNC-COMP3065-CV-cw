@@ -15,14 +15,6 @@ import numpy as np
 #     return kern
 
 def motion_kernel(d, angle, sz=65):
-    """
-    Generate a motion blur kernel.
-
-    :param d: The length of the motion blur kernel.
-    :param angle: The angle of the motion blur in degrees.
-    :param sz: The size of the motion blur kernel.
-    :return: The motion blur kernel.
-    """
     # Create a horizontal motion blur kernel
     kern = np.zeros((sz, sz))
     kern[sz//2, sz//2-d//2:sz//2+d//2] = 1
